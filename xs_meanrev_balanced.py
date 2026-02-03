@@ -7,7 +7,24 @@ import math
 import backtrader as bt
 
 '''
-python main.py --strategy xs_meanrev_balanced --data-dir DATA/PART1 --output-dir output/xsmeanrev_balanced --param bottom_pct=0.10 --param meanrev_window=5 --param day_top_n=1 --param entry_units_cap=500 --param atr_k=2.3 --param cooldown=2 --param two_bar_exit=True --debug 
+python main.py --strategy xs_meanrev_balanced --data-dir DATA/PART1 --output-dir output/XS_REV --param bottom_pct=0.10 --param meanrev_window=5 --param day_top_n=1 --param entry_units_cap=500 --param atr_k=2.3 --param cooldown=2 --param two_bar_exit=True --debug
+'''
+
+'''
+{
+  "final_value": 1003703.1205338006,
+  "bankrupt": false,
+  "bankrupt_date": null,
+  "open_pnl_pd_ratio": 2.3130340766273916,
+  "true_pd_ratio": 0.7319831861687562,
+  "activity_pct": 68.2,
+  "end_policy": "liquidate",
+  "s_mult": 2.0
+}
+=== Trade Analyzer Stats ===
+Total closed trades: 190
+Wins: 75
+Losses: 115
 '''
 
 """
