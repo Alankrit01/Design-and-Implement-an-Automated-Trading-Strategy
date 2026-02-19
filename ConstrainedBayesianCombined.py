@@ -1,7 +1,10 @@
 '''
-python main.py --strategy ConstrainedBayesianCombined --data-dir DATA/PART1 --output-dir output/BAYESTEST --debug
+python main.py --strategy ConstrainedBayesianCombined --data-dir DATA/RealStocks --output-dir output/BAYESTEST
 '''
-# Check logic for mean reversion. Entry conditions might be too tight.
+# Short Logic needs Fixing - Not working 
+'''
+https://www.buildalpha.com/robustness-testing-guide/
+'''
 
 '''
 {
@@ -33,11 +36,6 @@ Trend Following Trades:
   Losses: 6
   Total PnL: $14924.19
   Win Rate: 50.0%
-
-Other/Unlabeled Trades:
-  Total trades: 0
-  Wins: 0
-  Losses: 0
 '''
 
 import backtrader as bt
@@ -249,7 +247,7 @@ class BayesianTradingStrategy(bt.Strategy):
         signal_learning_enabled=True,    # Learn which entry signals are reliable
         min_confidence_mr=0.42,          # Mean reversion signal must have >42% posterior accuracy
         min_confidence_trend=0.42,       # Trend signal must have >42% posterior accuracy
-        sideways_threshold=0.40,         # Enter mean reversion if sideways probability >40%
+        sideways_threshold=0.30,         # Enter mean reversion if sideways probability >40%
         trending_threshold=0.50,         # Enter trend following if (uptrend + downtrend) >50%
         
         printlog=False,  
