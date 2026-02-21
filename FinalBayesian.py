@@ -95,9 +95,10 @@ class BayesianRegimeDetector(object):
         """
         
         self.price_history.append(close)
-        if len(self.price_history)>=20:
+        mw = self.lookback//3
+        if len(self.price_history)>=mw:
             # Calculate 20 bar momentum as %change      if price[0] = 100 and price[20] = 98, momentum = (100-98)/98
-            recent_change = (self.price_history[-1] - self.price_history[-20]) / self.price_history[-20]
+            recent_change = (self.price_history[-1] - self.price_history[-mw]) / self.price_history[-mw]
             if abs(recent_change)>0.02:     # If momentum > 2%, trending else sideways
                 self.trend_observations+=1
             else:
@@ -116,11 +117,12 @@ class BayesianRegimeDetector(object):
             Dictionary with probability 
         """
         
-        if len(self.price_history)<20:
+        mw = self.lookback//3
+        if len(self.price_history)<mw:
             return{'uptrend':0.33, 'downtrend':0.33, 'sideways':0.34}   # Uninformed prior
         
-        recent_20 = list(self.price_history)[-20:]   # Last 20 brs
-        early_20 = list(self.price_history)[-40:-20] if len(self.price_history)>=40 else recent_20  # Check bars 20-40 if available
+        recent_20 = list(self.price_history)[-mw:]   # Last 20 brs
+        early_20 = list(self.price_history)[-(mw*2):-mw] if len(self.price_history)>=mw*2 else recent_20  # Check bars 20-40 if available
         recent_avg = np.mean(recent_20)
         early_avg = np.mean(early_20)
         
@@ -253,6 +255,7 @@ class BayesianTradingStrategy(bt.Strategy):
         severe_breach_mult=0.60,    # Exit if price drops 0.60*ATR below trailing stop
         
         # Bayesian Learning Params
+        bayesian_lookback = 60,          # Rolling Lookback for Bayesian Regime Detector
         regime_learning_enabled=True,    # Learn if market is trending or mean-reverting
         signal_learning_enabled=True,    # Learn which entry signals are reliable
         min_confidence_mr=0.42,          # Mean reversion signal must have >42% posterior accuracy
@@ -264,14 +267,18 @@ class BayesianTradingStrategy(bt.Strategy):
     )
     
     def __init__(self):
+        
+        lb = self.p.bayesian_lookback
+        momentum_win = lb//3
+        
         self.atr = {d:bt.indicators.ATR(d,period=int(self.p.atr_len)) for d in self.datas} # Volatility Measure
-        self.vol_avg = {d:bt.indicators.SimpleMovingAverage(d.volume, period=20) for d in self.datas} # 20 bar moving Average
-        self.vol_std = {d:bt.indicators.StandardDeviation(d.volume, period=20) for d in self.datas} # 20 bar volume standard deviation
+        self.vol_avg = {d:bt.indicators.SimpleMovingAverage(d.volume, period=momentum_win) for d in self.datas} # 20 bar moving Average
+        self.vol_std = {d:bt.indicators.StandardDeviation(d.volume, period=momentum_win) for d in self.datas} # 20 bar volume standard deviation
         self.sma = {d:bt.indicators.SimpleMovingAverage(d.close, period=int(self.p.ma_len)) for d in self.datas} # SMA of close 
         self.highest = {d:bt.indicators.Highest(d.close, period=int(self.p.breakout_lookback)) for d in self.datas} # highest close in lookback
-        self.lowest = {d:bt.indicators.Lowest(d.close, period=20) for d in self.datas} # Lowest close in 20 bars
+        self.lowest = {d:bt.indicators.Lowest(d.close, period=momentum_win) for d in self.datas} # Lowest close in 20 bars
         
-        self.trend_filters = {d: BayesianRegimeDetector() for d in self.datas} # regime model - MR or TF
+        self.trend_filters = {d: BayesianRegimeDetector(lookback = lb) for d in self.datas} # regime model - MR or TF
         self.mr_signal_strength = {d: BayesianSignalStrength(prior_accuracy=0.48) for d in self.datas} # MR signal reliability
         self.tf_signal_strength = {d: BayesianSignalStrength(prior_accuracy=0.48) for d in self.datas} # TF signal reliability
         
@@ -283,7 +290,7 @@ class BayesianTradingStrategy(bt.Strategy):
             entry_units=0,        # How many units did we buy?
             entry_type='',        # Was this 'trend_following' or 'mean_reversion'?
             entry_bar=0,          # Which bar did we enter?
-            regime_history=deque(maxlen=20)   # Last 20 regime classifications
+            regime_history=deque(maxlen=self.p.bayesian_lookback//3)   # Last 20 regime classifications
         ) for d in self.datas}
         
         self.prev_pos = {d: 0.0 for d in self.datas}  # Track previous position size
@@ -297,7 +304,7 @@ class BayesianTradingStrategy(bt.Strategy):
         cehck if there is enough data
         Returns: True if there are atleast 40 bars of data (50 bar lookback + 1)
         """
-        return len(self) >= 40
+        return len(self) >= int(self.p.bayesian_lookback * 0.67)
     
     def reset_day(self):
         """
@@ -329,7 +336,8 @@ class BayesianTradingStrategy(bt.Strategy):
         short_return = (close - float(d.close[-self.p.meanrev_window])) / float(d.close[-self.p.meanrev_window]) # Return over last 5 bars
 
         # 20-bar low and distance from it
-        low_20 = min(float(d.low[-i]) for i in range(1, 21))
+        mw = self.p.bayesian_lookback // 3
+        low_20 = min(float(d.low[-i]) for i in range(1, mw+1))
         dist_from_low = (close - low_20) / low_20  # 0 near low, >0 above
 
         signals = {
@@ -354,7 +362,8 @@ class BayesianTradingStrategy(bt.Strategy):
         ret_5 = (close - float(d.close[-self.p.meanrev_window])) / float(d.close[-self.p.meanrev_window])
 
         # 20-bar high and distance from it
-        high_20 = max(float(d.high[-i]) for i in range(1, 21))
+        mw = self.p.bayesian_lookback // 3
+        high_20 = max(float(d.high[-i]) for i in range(1, mw+1))
         dist_from_high = (high_20 - close) / high_20  # 0 near high, >0 below
 
         signals = {
