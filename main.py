@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !!!! WORKING FOR SuperBayesian.py 22/02 !!!!
 # =============================================================================
 # main.py — BT396 Backtrader harness entrypoint
 # =============================================================================
@@ -463,3 +463,4 @@ if __name__ == "__main__":
         print(f"{BT396_VERSION} ({BT396_DATE})")
     else:
         main()
+
