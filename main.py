@@ -187,8 +187,10 @@ class TradeTypeAnalyzer(bt.Analyzer):
     """
     def __init__(self):
         self.trades_by_type = {
-            'mean_reversion': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
-            'trend_following': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'mean_reversion_long': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'trend_following_long': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'mean_reversion_short': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'trend_following_short': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
             'other': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0}
         }
 
@@ -426,22 +428,40 @@ def main():
     trade_types = strat.analyzers.trade_types.get_analysis()
     
     print("\n=== Trade Breakdown by Strategy Type ===")
-    print(f"\nMean Reversion Trades:")
-    print(f"  Total trades: {trade_types['mean_reversion']['total']}")
-    print(f"  Wins: {trade_types['mean_reversion']['wins']}")
-    print(f"  Losses: {trade_types['mean_reversion']['losses']}")
-    print(f"  Total PnL: ${trade_types['mean_reversion']['pnl']:.2f}")
-    if trade_types['mean_reversion']['total'] > 0:
-        win_rate = (trade_types['mean_reversion']['wins'] / trade_types['mean_reversion']['total']) * 100
+    print(f"\nMean Reversion Trades Long:")
+    print(f"  Total trades: {trade_types['mean_reversion_long']['total']}")
+    print(f"  Wins: {trade_types['mean_reversion_long']['wins']}")
+    print(f"  Losses: {trade_types['mean_reversion_long']['losses']}")
+    print(f"  Total PnL: ${trade_types['mean_reversion_long']['pnl']:.2f}")
+    if trade_types['mean_reversion_long']['total'] > 0:
+        win_rate = (trade_types['mean_reversion_long']['wins'] / trade_types['mean_reversion_long']['total']) * 100
         print(f"  Win Rate: {win_rate:.1f}%")
     
-    print(f"\nTrend Following Trades:")
-    print(f"  Total trades: {trade_types['trend_following']['total']}")
-    print(f"  Wins: {trade_types['trend_following']['wins']}")
-    print(f"  Losses: {trade_types['trend_following']['losses']}")
-    print(f"  Total PnL: ${trade_types['trend_following']['pnl']:.2f}")
-    if trade_types['trend_following']['total'] > 0:
-        win_rate = (trade_types['trend_following']['wins'] / trade_types['trend_following']['total']) * 100
+    print(f"\nTrend Following Trades Long:")
+    print(f"  Total trades: {trade_types['trend_following_long']['total']}")
+    print(f"  Wins: {trade_types['trend_following_long']['wins']}")
+    print(f"  Losses: {trade_types['trend_following_long']['losses']}")
+    print(f"  Total PnL: ${trade_types['trend_following_long']['pnl']:.2f}")
+    if trade_types['trend_following_long']['total'] > 0:
+        win_rate = (trade_types['trend_following_long']['wins'] / trade_types['trend_following_long']['total']) * 100
+        print(f"  Win Rate: {win_rate:.1f}%")
+    
+    print(f"\nMean Reversion Trades Short:")
+    print(f"  Total trades: {trade_types['mean_reversion_short']['total']}")
+    print(f"  Wins: {trade_types['mean_reversion_short']['wins']}")
+    print(f"  Losses: {trade_types['mean_reversion_short']['losses']}")
+    print(f"  Total PnL: ${trade_types['mean_reversion_short']['pnl']:.2f}")
+    if trade_types['mean_reversion_short']['total'] > 0:
+        win_rate = (trade_types['mean_reversion_short']['wins'] / trade_types['mean_reversion_short']['total']) * 100
+        print(f"  Win Rate: {win_rate:.1f}%")
+        
+    print(f"\nTrend Following Trades Shorts:")
+    print(f"  Total trades: {trade_types['trend_following_short']['total']}")
+    print(f"  Wins: {trade_types['trend_following_short']['wins']}")
+    print(f"  Losses: {trade_types['trend_following_short']['losses']}")
+    print(f"  Total PnL: ${trade_types['trend_following_short']['pnl']:.2f}")
+    if trade_types['trend_following_short']['total'] > 0:
+        win_rate = (trade_types['trend_following_short']['wins'] / trade_types['trend_following_short']['total']) * 100
         print(f"  Win Rate: {win_rate:.1f}%")
     
     print(f"\nOther/Unlabeled Trades:")
@@ -463,4 +483,3 @@ if __name__ == "__main__":
         print(f"{BT396_VERSION} ({BT396_DATE})")
     else:
         main()
-
