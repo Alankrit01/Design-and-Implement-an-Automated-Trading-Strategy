@@ -2,6 +2,9 @@
 python main.py --strategy SuperBayesian --data-dir DATA/PART1 --output-dir output/SuperBayes
 '''
 
+# Check exit conditions towards end period
+# Check parameters for MR and TF Short
+
 '''
 {
   "final_value": 1371372.9365009987,
