@@ -1,4 +1,4 @@
-# !!!! WORKING FOR SuperBayesian.py 22/02 !!!!
+# !!!! WORKING FOR SuperBayesian.py 25/02 !!!!
 # =============================================================================
 # main.py — BT396 Backtrader harness entrypoint
 # =============================================================================
@@ -180,48 +180,58 @@ def parse_args():
 
 
 # Added Jan26
+# Added Jan26
+
 class TradeTypeAnalyzer(bt.Analyzer):
     """
-    Tracks trades separated by type: mean_reversion vs trend_following
-    Returns dict with win/loss counts for each strategy type
+    Tracks trades separated by direction (long vs short) using realized PnL.
+    Does not depend on strategy internals, so it works with SuperBayesian.
     """
+
     def __init__(self):
         self.trades_by_type = {
-            'mean_reversion_long': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
-            'trend_following_long': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
-            'mean_reversion_short': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'mean_reversion_long':   {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'trend_following_long':  {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
+            'mean_reversion_short':  {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
             'trend_following_short': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0},
-            'other': {'total': 0, 'wins': 0, 'losses': 0, 'pnl': 0.0}
         }
 
     def notify_trade(self, trade):
-        """Called when a trade closes"""
-        if trade.isclosed:
-            data = trade.data
-            trade_type = 'other'
-            
-            try:
-                if hasattr(self.strategy, 'state') and data in self.strategy.state:
-                    entry_type = self.strategy.state[data].get('entry_type', 'other')
-                    if entry_type in self.trades_by_type:
-                        trade_type = entry_type
-            except Exception:
-                pass
-            
-            self.trades_by_type[trade_type]['total'] += 1
-            self.trades_by_type[trade_type]['pnl'] += trade.pnl
-            
-            if trade.pnl > 0:
-                self.trades_by_type[trade_type]['wins'] += 1
-            elif trade.pnl < 0:
-                self.trades_by_type[trade_type]['losses'] += 1
+        """
+        Called when a trade closes.
+
+        We cannot see the original 'entry_type' of SuperBayesian's child
+        strategies from here, so we classify only by direction:
+          - long trades are counted under 'trend_following_long'
+          - short trades are counted under 'trend_following_short'
+
+        This still gives you directional breakdown while keeping the
+        strategy code untouched.
+        """
+        if not trade.isclosed:
+            return
+
+        # Long if net size was positive during the trade, else short
+        size = trade.size  # final net size of the closed trade
+        if size > 0:
+            key = 'trend_following_long'
+        elif size < 0:
+            key = 'trend_following_short'
+        else:
+            # Fallback: classify by PnL sign if size is not available
+            key = 'trend_following_long' if trade.pnl >= 0 else 'trend_following_short'
+
+        bucket = self.trades_by_type[key]
+        bucket['total'] += 1
+        bucket['pnl'] += trade.pnl
+
+        if trade.pnl > 0:
+            bucket['wins'] += 1
+        elif trade.pnl < 0:
+            bucket['losses'] += 1
 
     def get_analysis(self):
-        """Return dictionary with trade type breakdown"""
         return self.trades_by_type
-
-
-
 
 
 # -----------------------------------------------------------------------------
@@ -462,15 +472,6 @@ def main():
     print(f"  Total PnL: ${trade_types['trend_following_short']['pnl']:.2f}")
     if trade_types['trend_following_short']['total'] > 0:
         win_rate = (trade_types['trend_following_short']['wins'] / trade_types['trend_following_short']['total']) * 100
-        print(f"  Win Rate: {win_rate:.1f}%")
-    
-    print(f"\nOther/Unlabeled Trades:")
-    print(f"  Total trades: {trade_types['other']['total']}")
-    print(f"  Wins: {trade_types['other']['wins']}")
-    print(f"  Losses: {trade_types['other']['losses']}")
-    print(f"  Total PnL: ${trade_types['other']['pnl']:.2f}")
-    if trade_types['other']['total'] > 0:
-        win_rate = (trade_types['other']['wins'] / trade_types['other']['total']) * 100
         print(f"  Win Rate: {win_rate:.1f}%")
 
 # -----------------------------------------------------------------------------
