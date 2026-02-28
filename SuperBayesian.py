@@ -1,25 +1,23 @@
 '''
 python main.py --strategy SuperBayesian --data-dir DATA/PART1 --output-dir output/SuperBayes
 '''
-
 # Check exit conditions towards end period
 # Check parameters for MR and TF Short
-
 '''
 {
-  "final_value": 1371372.9365009987,
+  "final_value": 1180833.9771859995,
   "bankrupt": false,
   "bankrupt_date": null,
-  "open_pnl_pd_ratio": 2.6648096129653633,
-  "true_pd_ratio": 2.6248374368252807,
-  "activity_pct": 91.9,
+  "open_pnl_pd_ratio": 2.744452504789552,
+  "true_pd_ratio": 2.720415116107024,
+  "activity_pct": 91.8,
   "end_policy": "liquidate",
   "s_mult": 2.0
 }
 === Trade Analyzer Stats ===
-Total closed trades: 16
-Wins: 8
-Losses: 8
+Total closed trades: 14
+Wins: 7
+Losses: 7
 
 === Trade Breakdown by Strategy Type ===
 
@@ -30,10 +28,10 @@ Mean Reversion Trades Long:
   Total PnL: $0.00
 
 Trend Following Trades Long:
-  Total trades: 8
-  Wins: 8
+  Total trades: 7
+  Wins: 7
   Losses: 0
-  Total PnL: $403739.35
+  Total PnL: $200979.58
   Win Rate: 100.0%
 
 Mean Reversion Trades Short:
@@ -43,10 +41,10 @@ Mean Reversion Trades Short:
   Total PnL: $0.00
 
 Trend Following Trades Shorts:
-  Total trades: 8
+  Total trades: 7
   Wins: 0
-  Losses: 8
-  Total PnL: $-20984.41
+  Losses: 7
+  Total PnL: $-14525.83
   Win Rate: 0.0%
 '''
 
@@ -237,7 +235,7 @@ class BayesianModelSelector(object):
                 "wins":0,
                 "total_pnl":0,
                 "pnl_series":[],
-                "Captail_allocated":0
+                "capital_allocated":0
             } for name in config_names
         }
         
@@ -252,7 +250,7 @@ class BayesianModelSelector(object):
         if won:
             s["wins"]+=1
             
-    def record_captial(self,config_name,notional):
+    def record_capital(self,config_name,notional):
         self.config_stats[config_name]["capital_allocated"]+=notional   #Track capital deployed by each confg
         
     def rolling_sharpe(self,config_name):
@@ -626,7 +624,7 @@ class ChildStrategy(object):
         vol_ok = vol_z >= self.cfg['vol_z_min'] 
 
         # Breakout: new N-bar low 
-        low_n = min(float(d.high[-k]) for k in range(1, self.cfg['breakout_lookback'] + 1))
+        low_n = min(float(d.low[-k]) for k in range(1, self.cfg['breakout_lookback'] + 1))
         brk_ok = close <= low_n
 
         # SMA trend
