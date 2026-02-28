@@ -1,23 +1,23 @@
 '''
 python main.py --strategy SuperBayesian --data-dir DATA/PART1 --output-dir output/SuperBayes
 '''
-# Check exit conditions towards end period
-# Check parameters for MR and TF Short
+# Check parameters for MR
+# Fix TF Short
 '''
 {
-  "final_value": 1180833.9771859995,
+  "final_value": 1080882.9083114997,
   "bankrupt": false,
   "bankrupt_date": null,
-  "open_pnl_pd_ratio": 2.744452504789552,
-  "true_pd_ratio": 2.720415116107024,
+  "open_pnl_pd_ratio": 1.6846699517822155,
+  "true_pd_ratio": 1.6021037621565088,
   "activity_pct": 91.8,
   "end_policy": "liquidate",
   "s_mult": 2.0
 }
 === Trade Analyzer Stats ===
-Total closed trades: 14
-Wins: 7
-Losses: 7
+Total closed trades: 10
+Wins: 5
+Losses: 5
 
 === Trade Breakdown by Strategy Type ===
 
@@ -28,10 +28,10 @@ Mean Reversion Trades Long:
   Total PnL: $0.00
 
 Trend Following Trades Long:
-  Total trades: 7
-  Wins: 7
+  Total trades: 5
+  Wins: 5
   Losses: 0
-  Total PnL: $200979.58
+  Total PnL: $111718.55
   Win Rate: 100.0%
 
 Mean Reversion Trades Short:
@@ -41,10 +41,10 @@ Mean Reversion Trades Short:
   Total PnL: $0.00
 
 Trend Following Trades Shorts:
-  Total trades: 7
+  Total trades: 5
   Wins: 0
-  Losses: 7
-  Total PnL: $-14525.83
+  Losses: 5
+  Total PnL: $-27195.35
   Win Rate: 0.0%
 '''
 
@@ -884,112 +884,143 @@ class SuperBayesian(bt.Strategy):
     
     def next(self):
         self.reset_day()
-        bar = len(self)    # Current bar
-        
-        # Bars left until end
+        bar = len(self)
+
+        # bars_left in data
         try:
             bars_left = self.datas[0].buflen() - bar
         except Exception:
             bars_left = 999999
 
-        # Initialise Start Value
-        if self.start_value is None:
-            try:
-                self.start_value = float(self.broker.getvalue())
-            except Exception:
-                self.start_value = 1.0
-
-        # Force exits in the final week
+        # hard liquidation very near the end
         if bars_left <= int(self.p.risk_free_bars):
             for d in self.datas:
                 pos = self.getposition(d).size
-                # If long sell to close
                 if pos > 0:
                     self.sell(data=d, size=pos)
-                # If short buy to cover
-                if pos < 0:
+                elif pos < 0:
                     self.buy(data=d, size=abs(pos))
             return
-        
-        # Meta Layer 
+
+        # tapered exit over each config's end_taper_bars
+        for name, child in self.children.items():
+            cfg = child.cfg
+            taper_bars = cfg.get('end_taper_bars', 0)
+            if taper_bars <= 0:
+                continue
+
+            if bars_left <= taper_bars:
+                keep_frac = max(0.0, min(1.0, bars_left / float(taper_bars)))
+
+                for dname, posinfo in list(child.positions.items()):
+                    d = next(dd for dd in self.datas if dd._name == dname)
+                    cur_parent_pos = self.getposition(d).size
+                    if cur_parent_pos == 0:
+                        continue
+
+                    target_size = int(round(cur_parent_pos * keep_frac))
+                    delta = cur_parent_pos - target_size
+                    if delta == 0:
+                        continue
+
+                    if cur_parent_pos > 0 and delta > 0:
+                        o = self.sell(data=d, size=delta)
+                    elif cur_parent_pos < 0 and delta > 0:
+                        o = self.buy(data=d, size=abs(delta))
+                    else:
+                        o = None
+
+                    if o:
+                        # mark as exit so notify_order does not treat it as an entry
+                        self.pendingorders[o.ref] = (name, d, 0, 'exit')
+
+        # meta‑layer update
         self.selector.step(bar)
         weights = self.selector.get_weights()
 
-        # Using Lookback 60 as reference window for ranking, cross sectional perf ranking
+        # cross‑sectional perf ranking (uses LB60 lookback window)
         ref_window = CONFIGS['LB60']['meanrev_window']
+        perf = {}
         try:
-            perf = {
-                d: (float(d.close[0]) - float(d.close[-ref_window])) / float(d.close[-ref_window])
-                for d in self.datas
-            }
+            for d in self.datas:
+                perf[d] = (float(d.close[0]) - float(d.close[-ref_window])) / float(d.close[-ref_window])
         except Exception:
-            perf = {d: 0.0 for d in self.datas}
+            for d in self.datas:
+                perf[d] = 0.0
 
-        # sort symbols by performance
         ranked = sorted(perf, key=perf.get)
         n = len(ranked)
         bottom_cut = max(1, int(CONFIGS['LB60']['top_pct'] * n))
         laggards = set(ranked[:bottom_cut])
 
-        port_val = float(self.broker.getvalue())
-        cash_now = float(self.broker.getcash())
-        invested = port_val - cash_now
-        global_headroom = max(0.0, self.p.global_max_exposure * port_val - invested)
+        portval = float(self.broker.getvalue())
+        cashnow = float(self.broker.getcash())
+        invested = portval - cashnow
+        global_headroom = max(0.0, self.p.global_max_exposure * portval - invested)
 
+        # handle exits first
+        for name, child in self.children.items():
+            for d in self.datas:
+                if d._name not in child.positions:
+                    continue
+                want_exit = child.check_exit(d, bar)
+                if not want_exit:
+                    continue
+
+                poskey = (name, d._name)
+                if poskey in self.openpositions:
+                    pos = self.getposition(d).size
+                    if pos > 0:
+                        o = self.sell(data=d, size=pos)
+                    elif pos < 0:
+                        o = self.buy(data=d, size=abs(pos))
+                    else:
+                        o = None
+                else:
+                    o = None
+
+                if o:
+                    self.pendingorders[o.ref] = (name, d, 0, 'exit')
+                    exitprice = float(d.close[0])
+                    child.record_exit(d, exitprice, self.selector)
+
+        # handle entries
         for name, child in self.children.items():
             if not child.ready(bar):
                 continue
 
-            weight = weights[name]      # Dirichlet capital weight
+            weight = weights.get(name, 0.0)
             cfg = child.cfg
 
-            # Exit Logic
             for d in self.datas:
-                if d._name in child.positions:
-                    wants_exit = child.check_exit(d, bar)
-                    if wants_exit:
-                        pos_key = (name, d._name)
-                        if pos_key in self.open_positions:
-                            pos = self.getposition(d).size
-                            if pos > 0:
-                                o = self.sell(data=d, size=pos)
-                            elif pos < 0:
-                                o = self.buy(data=d, size=abs(pos))
-                            else:
-                                o = None
-                        else:
-                            o = None        # PARENT DOESNT KNOW POSITION (CHECK ERROR)
-
-                        if o:
-                            self.pending_orders[o.ref] = (name, d, 0, 'exit')
-                        
-                        # Record exit in Child and calculate PnL
-                        exit_price = float(d.close[0])
-                        child.record_exit(d, exit_price, self.selector)
-                        
-                        # Cooldown 
-                        child.state[d]['cool_until'] = bar + cfg['cooldown']
-                        self.open_positions.pop(pos_key, None)
-                        continue
-                
-                # Entry check for new positon
-                intent = child.get_trade_intent(d, weight, bars_left, bar, perf, laggards)
+                intent = child.get_trade_intent(
+                    d=d,
+                    capital_weight=weight,
+                    bars_left=bars_left,
+                    tbar=bar,
+                    perf=perf,
+                    laggards=laggards,
+                )
                 if intent is None:
                     continue
 
                 notional = intent['notional']
                 sym_spent = self.day_symbol_spent.get(d._name, 0.0)
-                sym_cap = cfg['day_symbol_cap_notional'] * port_val
+                sym_cap = cfg['day_symbol_cap_notional'] * portval
 
                 if (
                     sym_spent + notional > sym_cap
-                    or self.day_spent_notional + notional > port_val * cfg['day_budget_frac']
+                    or self.day_spent_notional + notional > cfg['day_budget_frac'] * portval
                     or notional > global_headroom
-                    or cash_now < notional + self.p.global_cash_buffer
+                    or cashnow - notional < self.p.global_cash_buffer
                 ):
                     continue
 
-                # Submit order
+                # enforce cooldown per child-symbol
+                child.state[d]['cool_until'] = bar + cfg['cooldown']
+                poskey = (name, d._name)
+                self.open_positions.pop(poskey, None)
+
                 size = intent['size']
                 if intent['action'] == 'buy':
                     o = self.buy(data=d, size=size)
@@ -997,12 +1028,17 @@ class SuperBayesian(bt.Strategy):
                     o = self.sell(data=d, size=size)
 
                 if o:
-                    self.pending_orders[o.ref] = (name, d, intent['size_sign'], intent['entry_type'])
+                    self.pending_orders[o.ref] = (
+                        name,
+                        d,
+                        intent['sizesign'],
+                        intent['entrytype'],
+                    )
                     self.selector.record_capital(name, notional)
                     self.day_spent_notional += notional
                     self.day_symbol_spent[d._name] = sym_spent + notional
                     global_headroom -= notional
-                    cash_now -= notional
+                    cashnow -= notional
 
     def notify_order(self, order):
         """Handle order execution callbacks."""
