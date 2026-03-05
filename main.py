@@ -1,4 +1,4 @@
-# Updated DO NOT TRADE ANALYSER 02/03
+#!/usr/bin/env python3
 # =============================================================================
 # main.py — BT396 Backtrader harness entrypoint
 # =============================================================================
@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import backtrader as bt
+from PositionTypeAnalyser import PositionTypeAnalyzer, print_position_analysis, print_position_log
 
 # -----------------------------------------------------------------------------
 # Framework plotting utilities
@@ -344,6 +345,7 @@ def main():
     
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades') # Trade Analyser Added 24Nov
     cerebro.addanalyzer(TradeTypeAnalyzer, _name='trade_types')     # MR/TF Analyser Added 26Jan
+    cerebro.addanalyzer(PositionTypeAnalyzer, _name='pos_types') 
 
     # -------------------------------------------------------------------------
     # Execute backtest
@@ -472,6 +474,10 @@ def main():
     if trade_types['other']['total'] > 0:
         win_rate = (trade_types['other']['wins'] / trade_types['other']['total']) * 100
         print(f"  Win Rate: {win_rate:.1f}%")
+        
+    pos_data = strat.analyzers.pos_types.get_analysis()
+    print_position_analysis(pos_data)
+    print_position_log(pos_data)
 
 # -----------------------------------------------------------------------------
 # Entrypoint guard
