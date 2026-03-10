@@ -291,14 +291,14 @@ def print_position_log(analysis: dict, max_rows: int = 50):
     else:
         truncated = False
 
-    print(f"\n{'Symbol':<10} {'Type':<24} {'Side':>5} {'EntryDate':<12} "
+    print(f"\n{'Symbol':<10} {'Type':<24} {'EntryDate':<12} "
           f"{'ExitDate':<12} {'PnL':>12}  W/L")
     print("-" * 110)
     for r in positions:
         side_str = "LONG" if r.side > 0 else "SHORT"
         wl       = "WIN"  if r.won  else ("LOSS" if r.pnl < 0 else "BE")
         print(
-            f"{r.symbol:<10} {r.entry_type:<24} {side_str:>5} {r.entry_date:<12} "
+            f"{r.symbol:<10} {r.entry_type:<24} {r.entry_date:<12} "
             f"{r.exit_date:<12}"
             f"{r.pnl:>12,.2f}  {wl}"
         )
